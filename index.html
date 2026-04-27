@@ -12,6 +12,35 @@
   <div class="sub">6 副牌｜每鋪重洗｜澳門 no-hole-card 玩法｜逐鋪流水</div>
 </header>
 
+<div id="boardingModal" class="modal-backdrop show" role="dialog" aria-modal="true" aria-labelledby="boardingTitle">
+  <div class="modal-card ritual-card">
+    <div class="modal-kicker">澳門碼頭 · 上船前</div>
+    <h2 id="boardingTitle">先點齊彈藥</h2>
+    <p class="modal-copy">入場前答兩條問題，今次旅程就用呢個 bankroll 開局。</p>
+    <div class="field">
+      <label for="boardingCash">1. 今次帶左幾多子彈去玩?</label>
+      <input id="boardingCash" type="number" value="5000" min="0" step="100" inputmode="numeric">
+    </div>
+    <div class="field">
+      <label for="boardingReserve">2. 有冇後備彈藥?</label>
+      <input id="boardingReserve" type="number" value="2500" min="0" step="100" inputmode="numeric">
+    </div>
+    <button id="boardingOk" class="primary modal-main-btn">OK 上船</button>
+  </div>
+</div>
+
+<div id="reloadModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="reloadTitle">
+  <div class="modal-card ritual-card">
+    <div class="modal-kicker">子彈打晒</div>
+    <h2 id="reloadTitle">返香港，定覆桌?</h2>
+    <p id="reloadCopy" class="modal-copy">你一開始嗰份子彈已經唔夠再開新一鋪。</p>
+    <div class="modal-actions">
+      <button id="goHome" class="ghost">返香港</button>
+      <button id="reloadTable" class="primary">覆桌</button>
+    </div>
+  </div>
+</div>
+
 <main class="wrap">
   <aside class="card side-panel">
     <h2>設定 / Bankroll</h2>
@@ -69,12 +98,12 @@
   <section class="card table">
     <div class="table-main">
       <div class="felt">
-        <div class="zone">
+        <section class="zone dealer-zone">
           <div class="zone-title"><b>莊家</b><span id="dealerScore"></span></div>
           <div id="dealerCards" class="cards"></div>
-        </div>
+        </section>
 
-        <div class="zone player-zone">
+        <section class="zone betting-zone">
           <div class="zone-title"><b>玩家</b><span id="roundInfo"></span></div>
           <div class="betting-panel">
             <div class="betting-head">
@@ -94,10 +123,12 @@
               <button type="button" id="clearAllBets" class="ghost small-btn">清全部</button>
             </div>
           </div>
-          <div id="playerHands"></div>
-        </div>
+        </section>
 
-        <div id="message" class="message">輸入 bankroll 後按「重新開局」，再按「開新一鋪」。</div>
+        <section class="zone player-play-zone">
+          <div id="playerHands"></div>
+          <div id="message" class="message">OK 上船後，先喺下注區落注，再按「開新一鋪」。</div>
+        </section>
       </div>
 
       <section class="action-section">

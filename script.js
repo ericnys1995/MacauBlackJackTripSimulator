@@ -8,6 +8,7 @@ const PAIR_MIN = 50;
 const SIDE13_MIN = 100;
 const PAIR_PAYOUT = 11;
 const SIDE13_PAYOUT = 1;
+
 const BET_TYPES = {
   main: { label: '主注', min: MAIN_MIN, hint: '最少 $500' },
   pair: { label: 'PAIR', min: PAIR_MIN, hint: '1 賠 11｜最少 $50' },
@@ -42,9 +43,14 @@ let state = {
   sideSummary: '—',
   splitCount: 0,
   actionsTaken: false,
+  reloadPromptOpen: false,
 };
 
-function money(n) { return '$' + Math.round(n).toLocaleString('en-US'); }
+function money(n) {
+  const value = Math.round(Number(n) || 0);
+  const sign = value < 0 ? '-' : '';
+  return sign + '$' + Math.abs(value).toLocaleString('en-US');
+}
 function blankBet() { return { main: 0, pair: 0, under13: 0, over13: 0 }; }
 function resetPendingBets() {
   state.pendingBets = [blankBet(), blankBet(), blankBet()];
@@ -55,6 +61,7 @@ function isMobileUI() { return window.matchMedia('(max-width: 760px)').matches; 
 function getDoorCount() {
   return isMobileUI() ? 1 : Math.max(1, Math.min(3, Number($('doorCount')?.value || 1)));
 }
+function canEditBets() { return state.phase === 'idle' || state.phase === 'roundOver'; }
 function enforceDoorLimit() {
   const selector = $('doorCount');
   if (!selector) return;
@@ -67,7 +74,6 @@ function enforceDoorLimit() {
   state.doorCount = getDoorCount();
   if (state.selectedBet.door >= state.doorCount) state.selectedBet = { door: 0, type: 'main' };
 }
-function canEditBets() { return state.phase === 'idle' || state.phase === 'roundOver'; }
 function doorBetTotal(b) { return b.main + b.pair + b.under13 + b.over13; }
 function pendingTotal(limit = getDoorCount()) {
   return state.pendingBets.slice(0, limit).reduce((sum, b) => sum + doorBetTotal(b), 0);
@@ -75,7 +81,7 @@ function pendingTotal(limit = getDoorCount()) {
 function pendingSideTotal(limit = getDoorCount()) {
   return state.pendingBets.slice(0, limit).reduce((sum, b) => sum + b.pair + b.under13 + b.over13, 0);
 }
-function cardValue(c) { if (c.r === 'A') return 11; if (['J','Q','K'].includes(c.r)) return 10; return Number(c.r); }
+function cardValue(c) { if (c.r === 'A') return 11; if (['J', 'Q', 'K'].includes(c.r)) return 10; return Number(c.r); }
 function handValue(cards) {
   let total = cards.reduce((s, c) => s + cardValue(c), 0);
   let aces = cards.filter(c => c.r === 'A').length;
@@ -88,7 +94,10 @@ function dealerHasBlackjack() { return state.dealer.length === 2 && handValue(st
 function shuffle() {
   const d = [];
   for (let k = 0; k < 6; k++) for (const s of suits) for (const r of ranks) d.push({ r, s });
-  for (let i = d.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [d[i], d[j]] = [d[j], d[i]]; }
+  for (let i = d.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [d[i], d[j]] = [d[j], d[i]];
+  }
   state.shoe = d;
 }
 function draw() { if (!state.shoe.length) shuffle(); return state.shoe.pop(); }
@@ -100,9 +109,6 @@ function cardHTML(c) {
 }
 function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 function handText(cards) { return cards.map(c => c.r + c.s).join(' '); }
-function htmlEscape(str) {
-  return String(str).replace(/[&<>'"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[ch]));
-}
 
 function update() {
   enforceDoorLimit();
@@ -116,11 +122,11 @@ function update() {
 
   renderBettingBoard();
   renderPlayerHands();
+  updateBjLabels();
 
   const h = activeHand();
   const dealerA = state.dealer[0]?.r === 'A';
   const playerPhase = state.phase === 'player' || state.phase === 'choice';
-  updateBjLabels();
 
   $('deal').disabled = !canEditBets();
   $('hit').disabled = !playerPhase || !h || h.lockedOneCard;
@@ -139,8 +145,8 @@ function update() {
   if ($('doorCount')) $('doorCount').disabled = isMobileUI() || !canEditBets();
   renderLedger();
 }
-
 function msg(t) { $('message').innerHTML = t; }
+
 function selectedBetLabel() {
   const info = BET_TYPES[state.selectedBet.type];
   return `第 ${state.selectedBet.door + 1} 門 ${info.label}`;
@@ -148,6 +154,7 @@ function selectedBetLabel() {
 function renderBettingBoard() {
   const board = $('bettingBoard');
   if (!board) return;
+  if (!state.pendingBets.length) resetPendingBets();
   const count = getDoorCount();
   const locked = !canEditBets();
   const total = pendingTotal(count);
@@ -176,6 +183,7 @@ function renderBettingBoard() {
   if (side > 0) html += `<div class="side-line">邊注合計：${money(side)}。Pair 1賠11；-13/+13 暫以 1賠1 計。</div>`;
   board.innerHTML = html;
 }
+
 function renderPlayerHands() {
   const container = $('playerHands');
   if (!state.hands.length) {
@@ -183,7 +191,6 @@ function renderPlayerHands() {
     $('roundInfo').textContent = canEditBets() ? '先喺下注區揀籌碼' : '';
     return;
   }
-
   const active = activeHand();
   $('roundInfo').textContent = active ? `目前第 ${active.door + 1} 門 / 共 ${state.hands.length} 手牌` : '';
 
@@ -242,7 +249,7 @@ function addChip(value) {
   if (!canEditBets()) { msg('牌局進行中，不能改下注。'); return; }
   const count = getDoorCount();
   if (state.selectedBet.door >= count) state.selectedBet = { door: 0, type: 'main' };
-  if (pendingTotal(count) + value > state.cash) { msg(`主錢包暫時只得 ${money(state.cash)}，唔夠再加呢粒籌碼。`); return; }
+  if (pendingTotal(count) + value > state.cash) { msg(`主錢包暫時只得 ${money(state.cash)}，唔夠再加呢粒籌碼。`); maybePromptReload(); return; }
   state.pendingBets[state.selectedBet.door][state.selectedBet.type] += value;
   msg(`已加 ${money(value)} 落 ${selectedBetLabel()}。`);
   update();
@@ -266,9 +273,34 @@ function setSelectedBet(door, type) {
   update();
 }
 
-function startSession() {
-  state.cash = Number($('startCash').value || 5000);
-  state.reserve = Number($('reserveCash').value || 2500);
+function showModal(id) {
+  const modal = $(id);
+  if (!modal) return;
+  modal.classList.add('show');
+  document.body.classList.add('modal-open');
+}
+function hideModal(id) {
+  const modal = $(id);
+  if (!modal) return;
+  modal.classList.remove('show');
+  if (!document.querySelector('.modal-backdrop.show')) document.body.classList.remove('modal-open');
+}
+function showBoardingModal() {
+  $('boardingCash').value = $('startCash').value || state.initialCash || 5000;
+  $('boardingReserve').value = $('reserveCash').value || state.initialReserve || 0;
+  showModal('boardingModal');
+}
+function boardShip() {
+  const cash = Math.max(0, Number($('boardingCash').value || 0));
+  const reserve = Math.max(0, Number($('boardingReserve').value || 0));
+  $('startCash').value = cash;
+  $('reserveCash').value = reserve;
+  hideModal('boardingModal');
+  startSession(`OK 上船。今次子彈 ${money(cash)}，後備彈藥 ${money(reserve)}。先落注，再開新一鋪。`);
+}
+function startSession(customMessage) {
+  state.cash = Math.max(0, Number($('startCash').value || 5000));
+  state.reserve = Math.max(0, Number($('reserveCash').value || 0));
   state.initialCash = state.cash;
   state.initialReserve = state.reserve;
   state.topUpUsed = false;
@@ -280,25 +312,55 @@ function startSession() {
   state.insuranceBet = 0;
   state.insuranceChoiceDone = false;
   state.roundBets = [];
+  state.sideDelta = 0;
+  state.sideSummary = '—';
+  state.reloadPromptOpen = false;
   resetPendingBets();
   enforceDoorLimit();
-  msg('新局開始。先喺玩家下注區揀主注 / Pair / -13 / +13，再按「開新一鋪」。');
+  msg(customMessage || '新局開始。先喺玩家下注區揀主注 / Pair / -13 / +13，再按「開新一鋪」。');
   update();
+  maybePromptReload();
 }
-function topUp() {
-  if (state.topUpUsed) { msg('已經補過一次錢，不能再補。'); return; }
-  if (state.reserve <= 0) { msg('後備金已經無錢可補。'); return; }
-  state.cash += state.reserve;
+function reloadAtTable() {
+  if (state.topUpUsed) { msg('已經覆桌 / 補過一次，不能再補。'); return; }
+  if (state.reserve <= 0) { msg('冇後備彈藥可以覆桌。'); return; }
+  const amount = state.reserve;
+  state.cash += amount;
   state.reserve = 0;
   state.topUpUsed = true;
-  msg('已補一次後備金入主錢包。');
+  state.reloadPromptOpen = false;
+  hideModal('reloadModal');
+  if (state.phase === 'tripOver') state.phase = 'roundOver';
+  msg(`已覆桌，用後備彈藥 ${money(amount)} 繼續玩。`);
   update();
+}
+function topUp() { reloadAtTable(); }
+function goHome() {
+  state.reloadPromptOpen = false;
+  hideModal('reloadModal');
+  state.phase = 'tripOver';
+  msg('你揀咗返香港。今次行程完結，可以按「重新開局」再上船。');
+  update();
+}
+function maybePromptReload() {
+  if (state.reloadPromptOpen) return;
+  if (!(state.phase === 'idle' || state.phase === 'roundOver')) return;
+  if (state.cash >= MAIN_MIN) return;
+  if (!state.topUpUsed && state.reserve > 0) {
+    state.reloadPromptOpen = true;
+    $('reloadCopy').textContent = `主錢包得返 ${money(state.cash)}，唔夠主注最少 ${money(MAIN_MIN)}。後備彈藥仲有 ${money(state.reserve)}。`;
+    showModal('reloadModal');
+  } else if (state.cash < MAIN_MIN) {
+    state.phase = 'tripOver';
+    msg('子彈唔夠再開新一鋪，而且冇後備彈藥。今次行程完結。');
+    update();
+  }
 }
 
 async function newRound() {
   if (!canEditBets()) return;
   const checked = validateBets();
-  if (!checked.ok) { msg(checked.message); update(); return; }
+  if (!checked.ok) { msg(checked.message); update(); maybePromptReload(); return; }
 
   shuffle();
   state.cash -= checked.totalStake;
@@ -337,7 +399,9 @@ async function newRound() {
   }
 
   settleSideBets();
-  msg('派牌完成，準備開始動作。'); update(); await sleep(220);
+  msg('派牌完成，準備開始動作。');
+  update();
+  await sleep(220);
   beginNextDecision();
 }
 function makeHand(door, bet, cards = []) {
@@ -583,6 +647,7 @@ function finishRound(deltas, insuranceDelta, message) {
   logRound(deltas, insuranceDelta);
   msg(message);
   update();
+  maybePromptReload();
 }
 function logRound(deltas, insuranceDelta) {
   const mainStake = state.baseBet + state.extraStake;
@@ -612,7 +677,7 @@ function renderLedger() {
   </tr>`).join('');
 }
 
-$('newSession').onclick = startSession;
+$('newSession').onclick = showBoardingModal;
 $('topUp').onclick = topUp;
 $('deal').onclick = newRound;
 $('hit').onclick = hit;
@@ -635,7 +700,11 @@ document.querySelectorAll('[data-chip]').forEach(btn => {
 });
 $('clearBetCell').onclick = clearSelectedBet;
 $('clearAllBets').onclick = clearAllBets;
+$('boardingOk').onclick = boardShip;
+$('reloadTable').onclick = reloadAtTable;
+$('goHome').onclick = goHome;
 window.addEventListener('resize', () => { enforceDoorLimit(); update(); });
 
 resetPendingBets();
-startSession();
+update();
+showBoardingModal();
