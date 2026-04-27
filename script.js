@@ -112,6 +112,8 @@ function handText(cards) { return cards.map(c => c.r + c.s).join(' '); }
 
 function update() {
   enforceDoorLimit();
+  document.body.classList.toggle('round-active', !canEditBets());
+  document.body.classList.toggle('mobile-game', isMobileUI());
   $('cash').textContent = money(state.cash);
   $('reserve').textContent = money(state.reserve);
   $('handsPlayed').textContent = state.round;
